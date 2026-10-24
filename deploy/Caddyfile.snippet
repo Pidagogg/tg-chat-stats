@@ -1,0 +1,15 @@
+# Add inside the existing w-flow.tech site block of the VPS Caddyfile.
+# The Mini App is static files at /tg-stats/ — no domain of its own, no
+# backend. The header repeats the page's Content-Security-Policy and adds
+# frame-ancestors, so only Telegram may embed it.
+handle_path /tg-stats/* {
+	root * /srv/tg-stats
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://telegram.org; connect-src 'self' wss://*.web.telegram.org https://*.web.telegram.org; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		Cache-Control "public, max-age=300"
+	}
+	try_files {path} /index.html
+	file_server
+}

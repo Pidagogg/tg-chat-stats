@@ -1,0 +1,16 @@
+# The bot as one small container next to W flow on the VPS:
+#   docker compose -f deploy/docker-compose.bot.yml up -d
+# BOT_TOKEN comes from deploy/bot.env (git-ignored).
+services:
+  chat-stats-bot:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "bot/bot.mjs"]
+    volumes:
+      - ../bot:/app/bot:ro
+    env_file: ./bot.env
+    environment:
+      WEBAPP_URL: https://w-flow.tech/tg-stats/
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 64m

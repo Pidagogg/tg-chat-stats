@@ -1,0 +1,88 @@
+/* Telegram passes the user's theme as --tg-theme-* variables; the fallbacks
+   make the page look right in a normal browser too. */
+:root {
+  --bg: var(--tg-theme-bg-color, #10141f);
+  --bg2: var(--tg-theme-secondary-bg-color, #181e2e);
+  --ink: var(--tg-theme-text-color, #eef1f8);
+  --hint: var(--tg-theme-hint-color, #8d97ad);
+  --accent: var(--tg-theme-button-color, #6f7dff);
+  --accent-ink: var(--tg-theme-button-text-color, #ffffff);
+  --link: var(--tg-theme-link-color, #8fa0ff);
+  --danger: var(--tg-theme-destructive-text-color, #ff6b6b);
+  --line: color-mix(in srgb, var(--ink) 12%, transparent);
+  color-scheme: light dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input { font: inherit; color: inherit; }
+.app { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
+.langs button { background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 8px; color: var(--hint); cursor: pointer; }
+.langs button.on { color: var(--ink); border-color: var(--line); }
+h1 { font-size: 24px; margin: 6px 0 8px; }
+h2 { font-size: 15px; margin: 0 0 10px; color: var(--hint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+h3 { font-size: 13px; margin: 14px 0 6px; color: var(--hint); font-weight: 600; }
+.screen { display: flex; flex-direction: column; gap: 12px; }
+.screen.center { align-items: center; padding-top: 60px; text-align: center; }
+.muted { color: var(--hint); }
+.small { font-size: 13px; }
+.privacy { background: var(--bg2); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 0; }
+.card { background: var(--bg2); border-radius: 14px; padding: 14px; border: 0; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.card.action { cursor: pointer; color: var(--ink); }
+.card.action:disabled { opacity: 0.5; cursor: default; }
+.card.action span { color: var(--hint); font-size: 14px; }
+.card.action .btn { color: var(--accent-ink); align-self: flex-start; }
+.btn { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; cursor: pointer; text-align: center; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border: 0; font-weight: 600; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.sticky { position: sticky; bottom: 12px; }
+.link { background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; align-self: flex-start; }
+.link.danger { color: var(--danger); }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--hint); }
+.field input, .search { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--ink); width: 100%; }
+.note { border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 10px; cursor: pointer; }
+.note.err { background: color-mix(in srgb, var(--danger) 15%, transparent); }
+.note.ok { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; align-self: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.chat-list { display: flex; flex-direction: column; max-height: 55vh; overflow-y: auto; margin: 4px -4px; }
+.chat-item { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-radius: 8px; cursor: pointer; }
+.chat-item.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chat-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.segmented { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.segmented button { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.segmented button.on { border-color: var(--accent); color: var(--link); }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tile { background: var(--bg2); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; }
+.tile b { font-size: 22px; }
+.tile span { font-size: 12px; color: var(--hint); }
+@media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.bar-value { color: var(--hint); font-variant-numeric: tabular-nums; font-size: 13px; }
+.columns svg { width: 100%; height: 90px; display: block; }
+.columns .col { fill: var(--accent); }
+.col-labels { display: flex; font-size: 11px; color: var(--hint); }
+.col-labels span { text-align: center; overflow: hidden; white-space: nowrap; }
+.heatmap { display: flex; flex-direction: column; gap: 3px; }
+.heat-row { display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 2px; align-items: center; }
+.heat-day, .heat-hour { font-size: 11px; color: var(--hint); }
+.heat-cell { aspect-ratio: 1; border-radius: 3px; background: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--bg); border-radius: 999px; padding: 3px 10px; font-size: 14px; }
+.chip.emoji { font-size: 18px; }
+.chip small { color: var(--hint); font-size: 12px; }
+.card.share { flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.check { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.promo { text-decoration: none; color: var(--ink); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--bg2)), var(--bg2)); }
+.promo b { color: var(--link); }
+.promo-line { display: block; margin-top: 18px; text-align: center; font-size: 13px; color: var(--hint); text-decoration: none; }
+.promo-line b { color: var(--link); font-weight: 600; }
+.compare-head { display: flex; justify-content: space-between; align-items: center; }
+.compare-grid { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--hint); }
+.bottom { margin-top: 28px; text-align: center; }
+.bottom .link { align-self: center; }
