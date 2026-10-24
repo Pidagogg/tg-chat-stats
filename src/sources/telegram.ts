@@ -8,6 +8,7 @@
 // GramJS (the `telegram` package) is archived; `teleproto` is its maintained
 // fork. Everything GramJS-specific lives in this file so a switch is local.
 import type { ChatData, ChatType, Msg, MsgKind } from "../stats/types.ts";
+import { deliveryOf, nextKindOf, type Delivery, type DeliveryKind } from "./codeDelivery.ts";
 
 const SESSION_KEY = "tgstats.session";
 const API_ID = Number(import.meta.env.VITE_TG_API_ID || 0);
@@ -68,18 +69,121 @@ export interface LoginPrompts {
   onError: (err: Error) => void;
 }
 
-export async function loginWithPhone(phone: string, prompts: LoginPrompts) {
+// ---- phone login, step by step ----
+// Not GramJS's start(): it hides where Telegram sent the code, and can't
+// resend it another way or set up the login e-mail Telegram may demand first.
+
+export interface CodeRequest {
+  phone: string;
+  hash: string;
+  delivery: Delivery;
+  /** the other way Telegram offers for "send the code another way" */
+  next: DeliveryKind | null;
+  /** seconds before that other way may be used */
+  timeout?: number;
+  /** Telegram logged the device in straight away */
+  done?: boolean;
+}
+
+// Telegram's own error names (PHONE_CODE_INVALID, FLOOD_WAIT_…) are the useful part
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rpcError = (err: any) => new Error(err?.errorMessage || err?.message || String(err));
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function codeRequest(phone: string, sent: any): CodeRequest {
+  if (sent?.className === "auth.SentCodeSuccess") return { phone, hash: "", delivery: { kind: "app" }, next: null, done: true };
+  const req = { phone, hash: sent.phoneCodeHash, delivery: deliveryOf(sent.type), next: nextKindOf(sent.nextType), timeout: sent.timeout };
+  // where the code went is the first question when a login fails; no number or code is logged
+  console.info("[chat-stats] login code:", req.delivery.kind, "· another way:", req.next ?? "none");
+  return req;
+}
+
+export async function requestCode(phone: string): Promise<CodeRequest> {
   const c = await getClient();
-  await c.start({
-    phoneNumber: async () => phone,
-    phoneCode: prompts.code,
-    password: prompts.password,
-    onError: (err: Error) => {
-      prompts.onError(err);
-      return Promise.resolve(true); // stop instead of retrying forever
-    },
-  });
-  persist();
+  const { Api } = await gram();
+  try {
+    const sent = await c.invoke(new Api.auth.SendCode({ phoneNumber: phone, apiId: API_ID, apiHash: API_HASH, settings: new Api.CodeSettings({}) }));
+    const req = codeRequest(phone, sent);
+    if (req.done) persist();
+    return req;
+  } catch (err) {
+    throw rpcError(err);
+  }
+}
+
+export async function resendCode(req: CodeRequest): Promise<CodeRequest> {
+  const c = await getClient();
+  const { Api } = await gram();
+  try {
+    return codeRequest(req.phone, await c.invoke(new Api.auth.ResendCode({ phoneNumber: req.phone, phoneCodeHash: req.hash })));
+  } catch (err) {
+    throw rpcError(err);
+  }
+}
+
+/** Telegram wants a login e-mail before it sends any code: send a code to that address. */
+export async function setUpLoginEmail(req: CodeRequest, email: string) {
+  const c = await getClient();
+  const { Api } = await gram();
+  try {
+    await c.invoke(new Api.account.SendVerifyEmailCode({ purpose: new Api.EmailVerifyPurposeLoginSetup({ phoneNumber: req.phone, phoneCodeHash: req.hash }), email }));
+  } catch (err) {
+    throw rpcError(err);
+  }
+}
+
+/** Confirm the new login e-mail; Telegram answers with the real login code request. */
+export async function confirmLoginEmail(req: CodeRequest, code: string): Promise<CodeRequest> {
+  const c = await getClient();
+  const { Api } = await gram();
+  try {
+    const verified = await c.invoke(
+      new Api.account.VerifyEmail({
+        purpose: new Api.EmailVerifyPurposeLoginSetup({ phoneNumber: req.phone, phoneCodeHash: req.hash }),
+        verification: new Api.EmailVerificationCode({ code }),
+      })
+    );
+    return codeRequest(req.phone, verified.sentCode);
+  } catch (err) {
+    throw rpcError(err);
+  }
+}
+
+/** "done", or "password" when two-step verification is on. */
+export async function signIn(req: CodeRequest, code: string): Promise<"done" | "password"> {
+  const c = await getClient();
+  const { Api } = await gram();
+  try {
+    const result = await c.invoke(
+      req.delivery.kind === "email"
+        ? new Api.auth.SignIn({ phoneNumber: req.phone, phoneCodeHash: req.hash, emailVerification: new Api.EmailVerificationCode({ code }) })
+        : new Api.auth.SignIn({ phoneNumber: req.phone, phoneCodeHash: req.hash, phoneCode: code })
+    );
+    if (result?.className === "auth.AuthorizationSignUpRequired") throw new Error("This number has no Telegram account.");
+    persist();
+    return "done";
+  } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((err as any)?.errorMessage === "SESSION_PASSWORD_NEEDED") return "password";
+    throw rpcError(err);
+  }
+}
+
+export async function passwordHint(): Promise<string> {
+  const { Api } = await gram();
+  return (await (await getClient()).invoke(new Api.account.GetPassword())).hint || "";
+}
+
+export async function signInPassword(password: string) {
+  const c = await getClient();
+  const { Api } = await gram();
+  const { computeCheck } = await import("telegram/Password");
+  try {
+    await c.invoke(new Api.auth.CheckPassword({ password: await computeCheck(await c.invoke(new Api.account.GetPassword()), password) }));
+    persist();
+  } catch (err) {
+    throw rpcError(err);
+  }
 }
 
 export async function loginWithQr(onQr: (url: string) => void, prompts: Omit<LoginPrompts, "code">) {
