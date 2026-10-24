@@ -32,6 +32,7 @@ export function Login({ t, onDone, onError }: { t: Texts; onDone: () => void; on
   }, [wait]);
 
   const run = async (from: Step, work: () => Promise<void>) => {
+    onError(""); // the last attempt's error is stale once the user tries again
     setStep("busy");
     try {
       await work();

@@ -38,6 +38,17 @@ export default function App() {
     isLoggedIn().then(setLoggedIn);
   }, []);
 
+  // A message only matters right after the thing that caused it: it goes away
+  // by itself, and a new attempt clears it at once (see Login's run()).
+  useEffect(() => {
+    if (!error && !notice) return;
+    const timer = setTimeout(() => {
+      setError("");
+      setNotice("");
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [error, notice]);
+
   const fail = (err: unknown) => {
     setError(String((err as Error)?.message || err));
     setScreen((s) => (s.kind === "work" ? { kind: "home" } : s));
@@ -137,13 +148,21 @@ export default function App() {
       </header>
 
       {error && (
-        <div className="note err" onClick={() => setError("")}>
-          {t.errorPrefix} {error}
+        <div className="note err banner" onClick={() => setError("")}>
+          <span>
+            {t.errorPrefix} {error}
+          </span>
+          <button className="note-x" aria-label={t.close}>
+            ×
+          </button>
         </div>
       )}
       {notice && (
-        <div className="note ok" onClick={() => setNotice("")}>
-          {notice}
+        <div className="note ok banner" onClick={() => setNotice("")}>
+          <span>{notice}</span>
+          <button className="note-x" aria-label={t.close}>
+            ×
+          </button>
         </div>
       )}
 

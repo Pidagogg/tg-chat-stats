@@ -93,6 +93,7 @@ const en = {
   promoCta: "Build it free with W flow →",
   promoHome: "Automate your Telegram without code —",
   errorPrefix: "Something went wrong:",
+  close: "Close",
   noMessages: "No messages in this period.",
   kinds: {
     text: "Text",
@@ -203,6 +204,7 @@ const ru: typeof en = {
   promoCta: "Соберите это бесплатно в W flow →",
   promoHome: "Автоматизируйте Telegram без кода —",
   errorPrefix: "Что-то пошло не так:",
+  close: "Закрыть",
   noMessages: "За этот период сообщений нет.",
   kinds: {
     text: "Текст",
