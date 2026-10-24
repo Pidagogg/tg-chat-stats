@@ -1,9 +1,31 @@
-import { useEffect, useState } from "react";
+import qrcode from "qrcode-generator";
+import { useEffect, useRef, useState } from "react";
 import type { Texts } from "../i18n.ts";
 import type { Delivery } from "../sources/codeDelivery.ts";
-import { confirmLoginEmail, passwordHint, requestCode, resendCode, setUpLoginEmail, signIn, signInPassword, type CodeRequest } from "../sources/telegram.ts";
+import { confirmLoginEmail, loginWithQr, passwordHint, requestCode, resendCode, setUpLoginEmail, signIn, signInPassword, type CodeRequest, type QrLogin } from "../sources/telegram.ts";
 
-type Step = "phone" | "code" | "setupEmail" | "emailCode" | "password" | "busy";
+type Step = "phone" | "code" | "setupEmail" | "emailCode" | "password" | "qr" | "busy";
+
+/** Telegram's error names (SEND_CODE_UNAVAILABLE, FLOOD_WAIT_60, …) in words, when we know them. */
+function explain(t: Texts, message: string) {
+  const name = message.replace(/_\d+$/, "");
+  const known = t.rpcErrors[name];
+  const seconds = message.match(/_(\d+)$/)?.[1];
+  return known ? known.replace("{n}", seconds || "") : message;
+}
+
+const qrImage = (url: string) => {
+  const qr = qrcode(0, "M");
+  qr.addData(url);
+  qr.make();
+  return qr.createDataURL(6, 2);
+};
+
+// the QR needs a second screen to be scanned from; on a phone, say so
+const onPhone = () => {
+  const p = (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform;
+  return p === "android" || p === "ios" || /Android|iPhone|iPad/i.test(navigator.userAgent);
+};
 
 /** Where the code went, in words — the thing a stuck user needs most. */
 function whereTheCodeIs(t: Texts, d: Delivery, phone: string) {
@@ -23,6 +45,17 @@ export function Login({ t, onDone, onError }: { t: Texts; onDone: () => void; on
   const [hint, setHint] = useState("");
   const [req, setReq] = useState<CodeRequest | null>(null);
   const [wait, setWait] = useState(0);
+  const [qrUrl, setQrUrl] = useState("");
+  const qr = useRef<QrLogin | null>(null);
+
+  // leaving the QR screen (or the login) stops the token refresh
+  useEffect(() => () => qr.current?.cancel(), []);
+  useEffect(() => {
+    if (step !== "qr" && step !== "busy") {
+      qr.current?.cancel();
+      qr.current = null;
+    }
+  }, [step]);
 
   // the "another way" button unlocks after Telegram's timeout
   useEffect(() => {
@@ -37,7 +70,7 @@ export function Login({ t, onDone, onError }: { t: Texts; onDone: () => void; on
     try {
       await work();
     } catch (err) {
-      onError(String((err as Error).message || err));
+      onError(explain(t, String((err as Error).message || err)));
       setStep(from);
     }
   };
@@ -75,6 +108,33 @@ export function Login({ t, onDone, onError }: { t: Texts; onDone: () => void; on
         onDone();
       });
   };
+
+  const startQr = () => {
+    onError("");
+    setQrUrl("");
+    setStep("qr");
+    const login = loginWithQr(setQrUrl);
+    qr.current = login;
+    login.result.then(toPasswordOrDone, (err) => {
+      if (qr.current !== login) return; // cancelled on purpose
+      onError(explain(t, String((err as Error).message || err)));
+      setStep("phone");
+    });
+  };
+
+  if (step === "qr") {
+    return (
+      <div className="card">
+        <h2>{t.qrTitle}</h2>
+        {qrUrl ? <img className="qr" src={qrImage(qrUrl)} alt="QR" /> : <div className="spinner" />}
+        <p className="note ok">{t.qrHow}</p>
+        {onPhone() && <p className="muted small">{t.qrOnPhone}</p>}
+        <button className="link" onClick={() => setStep("phone")}>
+          {t.qrBack}
+        </button>
+      </div>
+    );
+  }
 
   if (step === "busy") {
     return (
@@ -121,10 +181,16 @@ export function Login({ t, onDone, onError }: { t: Texts; onDone: () => void; on
       <button className="btn primary" onClick={submit} disabled={step === "phone" ? phone.replace(/\D/g, "").length < 7 : !value.trim()}>
         {step === "phone" ? t.sendCode : t.confirm}
       </button>
-      {step === "code" && req && (
+      {/* only when Telegram offers another way: otherwise resending just fails with SEND_CODE_UNAVAILABLE */}
+      {step === "code" && req?.next && (
         <button className="link" disabled={wait > 0} onClick={() => run("code", async () => gotCodeRequest(await resendCode(req)))}>
-          {(req.next && t.resendAs[req.next]) || t.resendAgain}
+          {t.resendAs[req.next] || t.resendAgain}
           {wait > 0 ? ` (${wait})` : ""}
+        </button>
+      )}
+      {(step === "phone" || step === "code") && (
+        <button className="link" onClick={startQr}>
+          {t.qrLogin}
         </button>
       )}
       {step !== "phone" && (

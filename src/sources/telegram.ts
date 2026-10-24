@@ -63,12 +63,6 @@ export async function isLoggedIn() {
   }
 }
 
-export interface LoginPrompts {
-  code: () => Promise<string>;
-  password: (hint?: string) => Promise<string>;
-  onError: (err: Error) => void;
-}
-
 // ---- phone login, step by step ----
 // Not GramJS's start(): it hides where Telegram sent the code, and can't
 // resend it another way or set up the login e-mail Telegram may demand first.
@@ -186,24 +180,67 @@ export async function signInPassword(password: string) {
   }
 }
 
-export async function loginWithQr(onQr: (url: string) => void, prompts: Omit<LoginPrompts, "code">) {
-  const c = await getClient();
-  await c.signInUserWithQrCode(
-    { apiId: API_ID, apiHash: API_HASH },
-    {
-      qrCode: async ({ token }: { token: Uint8Array }) => {
-        let b64 = btoa(String.fromCharCode(...token));
-        b64 = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-        onQr(`tg://login?token=${b64}`);
-      },
-      password: prompts.password,
-      onError: (err: Error) => {
-        prompts.onError(err);
-        return Promise.resolve(true);
-      },
+// ---- QR login ----
+// Telegram sometimes answers "code sent to the app" for third-party apps and
+// then never delivers it. A QR code needs no code at all: a phone already
+// logged in approves it (Settings → Devices → Link Desktop Device). Our own
+// loop, not GramJS's signInUserWithQrCode: that one can't be stopped when the
+// user leaves the screen, and keeps refreshing the token forever.
+
+export interface QrLogin {
+  /** "done", or "password" when two-step verification is on */
+  result: Promise<"done" | "password">;
+  cancel: () => void;
+}
+
+const tokenUrl = (token: Uint8Array) => `tg://login?token=${btoa(String.fromCharCode(...token)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+
+export function loginWithQr(onQr: (url: string) => void): QrLogin {
+  let active = true;
+  let wake = () => {};
+  const result = (async (): Promise<"done" | "password"> => {
+    const c = await getClient();
+    const { Api } = await gram();
+    // Telegram announces the approval with updateLoginToken; then exporting again returns the login
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    c.addEventHandler((update: any) => {
+      if (active && update?.className === "UpdateLoginToken") wake();
+    });
+    try {
+      while (active) {
+        let res = await c.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] }));
+        if (res.className === "auth.LoginTokenMigrateTo") {
+          await c._switchDC(res.dcId);
+          res = await c.invoke(new Api.auth.ImportLoginToken({ token: res.token }));
+        }
+        if (res.className === "auth.LoginTokenSuccess") {
+          persist();
+          return "done";
+        }
+        onQr(tokenUrl(res.token));
+        // a token lives about 30 s: wait for the approval or the expiry, whichever comes first
+        const ms = Math.max(5000, Math.min(30000, res.expires * 1000 - Date.now()));
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+          setTimeout(resolve, ms);
+        });
+      }
+      throw new Error("cancelled");
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((err as any)?.errorMessage === "SESSION_PASSWORD_NEEDED") return "password";
+      throw rpcError(err);
+    } finally {
+      active = false;
     }
-  );
-  persist();
+  })();
+  return {
+    result,
+    cancel: () => {
+      active = false;
+      wake();
+    },
+  };
 }
 
 export async function logout() {
