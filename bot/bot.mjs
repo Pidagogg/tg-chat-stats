@@ -22,7 +22,7 @@ const API = `https://api.telegram.org/bot${TOKEN}`;
 const TEXT = {
   en: {
     about:
-      "📊 *Chat Stats* — who writes more, when you talk, how fast you answer, top words and emojis. For private chats and groups, and you can compare chats.\n\n🔒 Everything is analysed on *your* device. No message ever reaches a server — not even ours.",
+      "📊 *Chat Stats* — who writes more, when you talk, how fast you answer, top words and emojis. 🔎 Search any word and see who wrote it how often. For private chats and groups, and you can compare chats.\n\n🔒 Everything is analysed on *your* device. No message ever reaches a server — not even ours.",
     open: "Open Chat Stats",
     menu: "Stats",
     short: "Telegram chat stats, analysed on your device. Automate your Telegram with w-flow.tech",
@@ -36,7 +36,7 @@ const TEXT = {
   },
   ru: {
     about:
-      "📊 *Статистика чатов* — кто пишет больше, когда вы общаетесь, как быстро отвечаете, частые слова и эмодзи. Для личных чатов и групп, можно сравнивать чаты.\n\n🔒 Всё анализируется на *вашем* устройстве. Ни одно сообщение не попадает на сервер — даже на наш.",
+      "📊 *Статистика чатов* — кто пишет больше, когда вы общаетесь, как быстро отвечаете, частые слова и эмодзи. 🔎 Найдите любое слово и узнайте, кто и сколько раз его написал. Для личных чатов и групп, можно сравнивать чаты.\n\n🔒 Всё анализируется на *вашем* устройстве. Ни одно сообщение не попадает на сервер — даже на наш.",
     open: "Открыть статистику",
     menu: "Статистика",
     short: "Статистика чатов Telegram прямо на вашем устройстве. Автоматизируйте Telegram с w-flow.tech",
@@ -84,16 +84,35 @@ const keyboard = (t) => ({
 const send = (chatId, text, replyMarkup) =>
   call("sendMessage", { chat_id: chatId, text, parse_mode: "Markdown", link_preview_options: { is_disabled: true }, reply_markup: replyMarkup });
 
-const sendAd = (chatId, t, campaign) => send(chatId, t.pitch, { inline_keyboard: [[{ text: t.pitchButton, url: promoUrl(campaign) }]] });
+// ---- the ad: an album of pictures (ad/render.mjs → public/ad/, shipped with
+// the Mini App), then the pitch with its button. An album can't carry
+// buttons, so the button rides on the text. Telegram fetches the pictures by
+// URL once; after that their file_ids are reused, so nothing is fetched again.
+const AD_PICTURES = ["1-hero", "2-ai-bot", "3-digest", "4-sheets"];
+const adFileIds = { en: null, ru: null };
+
+async function sendPictures(chatId, lang) {
+  const media = AD_PICTURES.map((name, i) => ({ type: "photo", media: adFileIds[lang]?.[i] || new URL(`ad/${lang}-${name}.png`, WEBAPP_URL).href }));
+  const sent = await call("sendMediaGroup", { chat_id: chatId, media });
+  adFileIds[lang] = sent.map((m) => m.photo.at(-1).file_id);
+}
+
+async function sendAd(chatId, lang, campaign) {
+  const t = TEXT[lang];
+  // a picture that can't be fetched must not cost the pitch itself
+  await sendPictures(chatId, lang).catch((err) => console.error("ad pictures:", err.message));
+  await send(chatId, t.pitch, { inline_keyboard: [[{ text: t.pitchButton, url: promoUrl(campaign) }]] });
+}
 
 async function reply(msg) {
-  const t = TEXT[langOf(msg.from?.language_code)];
+  const lang = langOf(msg.from?.language_code);
+  const t = TEXT[lang];
   const text = msg.text || "";
   if (/^\/start(@\w+)?(\s|$)/i.test(text)) {
-    await sendAd(msg.chat.id, t, "start");
+    await sendAd(msg.chat.id, lang, "start");
     await send(msg.chat.id, t.about, keyboard(t));
   } else if (/^\/wflow(@\w+)?(\s|$)/i.test(text)) {
-    await sendAd(msg.chat.id, t, "command");
+    await sendAd(msg.chat.id, lang, "command");
   } else {
     // "what this bot does" from the keyboard, or anything else
     await send(msg.chat.id, t.about, { inline_keyboard: [[{ text: t.open, web_app: { url: WEBAPP_URL } }]] });

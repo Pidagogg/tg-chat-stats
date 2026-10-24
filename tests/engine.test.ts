@@ -1,7 +1,7 @@
 // Stats engine + Desktop export parser. Run: npm test
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { computeStats, compareChats, streaks, REPLY_WINDOW } from "../src/stats/engine.ts";
+import { computeStats, compareChats, countWord, streaks, REPLY_WINDOW } from "../src/stats/engine.ts";
 import { parseExport, exportText } from "../src/sources/desktopExport.ts";
 import type { ChatData, Msg } from "../src/stats/types.ts";
 
@@ -131,4 +131,28 @@ test("the Desktop export parser handles single chats and full exports", () => {
   });
   assert.deepEqual(full.map((c) => [c.type, c.me]), [["group", "user1"], ["channel", "user1"]]);
   assert.throws(() => parseExport({ foo: 1 }), /No chats found/);
+});
+
+test("word search counts each person's uses, whole words, any case, ё = е", () => {
+  const chat: ChatData = {
+    id: "w",
+    title: "Words",
+    type: "group",
+    messages: [
+      msg("u1", at(2026, 3, 2, 9), { text: "Coffee? COFFEE! coffee-time" }),
+      msg("u2", at(2026, 3, 2, 10), { text: "no coffees, decaf coffee only" }),
+      msg("u2", at(2026, 3, 2, 11), { text: "Ёлка и елка" }),
+      msg("u3", at(2026, 3, 2, 12), { text: "nothing here", fromName: "Cid" }),
+      msg("u1", at(2026, 3, 2, 13), { kind: "voice" }),
+    ],
+  };
+  const exact = countWord(chat, "coffee");
+  assert.equal(exact.total, 4);
+  assert.deepEqual(exact.senders.map((s) => [s.name, s.count, s.messages]), [["Ann", 3, 1], ["Bob", 1, 1], ["Cid", 0, 0]]);
+  const forms = countWord(chat, "Coffee", { forms: true });
+  assert.equal(forms.senders.find((s) => s.name === "Bob")!.count, 2);
+  assert.equal(countWord(chat, "елка").total, 2);
+  assert.equal(countWord(chat, "decaf coffee").total, 1);
+  assert.equal(countWord(chat, "  ").total, 0);
+  assert.equal(countWord(chat, "c+").total, 0);
 });

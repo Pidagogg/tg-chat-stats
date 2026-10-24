@@ -194,6 +194,47 @@ export interface CompareRow {
   longestStreak: number;
 }
 
+// ---- word search ----
+
+export interface WordCount {
+  query: string;
+  total: number;
+  /** everyone who wrote in the chat, most uses first */
+  senders: Array<{ id: string; name: string; count: number; messages: number }>;
+}
+
+// ё and е are written interchangeably in Russian, so they must match each other
+const fold = (s: string) => s.toLowerCase().replace(/ё/g, "е");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * How often each person used a word (or phrase): whole words, any case. With
+ * forms, the word may go on ("coffee" → "coffees", "кофе" → "кофейку"), which
+ * Russian needs for its endings.
+ */
+export function countWord(chat: ChatData, query: string, opts: { forms?: boolean } = {}): WordCount {
+  const q = fold(query.trim()).replace(/\s+/g, " ");
+  const senders = new Map<string, { id: string; name: string; count: number; messages: number }>();
+  for (const m of chat.messages) {
+    if (!senders.has(m.from)) senders.set(m.from, { id: m.from, name: m.fromName, count: 0, messages: 0 });
+    else senders.get(m.from)!.name = m.fromName;
+  }
+  let total = 0;
+  if (/[\p{L}\p{N}]/u.test(q)) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(q).replace(/ /g, "\\s+")}${opts.forms ? "" : "(?![\\p{L}\\p{N}])"}`, "gu");
+    for (const m of chat.messages) {
+      if (!m.text) continue;
+      const n = fold(m.text).match(re)?.length || 0;
+      if (!n) continue;
+      const s = senders.get(m.from)!;
+      s.count += n;
+      s.messages++;
+      total += n;
+    }
+  }
+  return { query: query.trim(), total, senders: [...senders.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) };
+}
+
 /** Several chats side by side — "who do I text most". */
 export function compareChats(all: Stats[], me?: string): CompareRow[] {
   return all

@@ -28,6 +28,8 @@ export default function App() {
   const [dialogs, setDialogs] = useState<DialogInfo[]>([]);
   const [exported, setExported] = useState<ChatData[]>([]);
   const [stats, setStats] = useState<Stats[]>([]);
+  // the analysed chats stay in memory (only on this device) for the word search
+  const [chats, setChats] = useState<ChatData[]>([]);
   const [me, setMe] = useState<string | undefined>();
   const [loggedIn, setLoggedIn] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -71,6 +73,7 @@ export default function App() {
     setScreen({ kind: "work", label: t.analysing });
     const result = await computeInWorker(chats);
     setStats(result);
+    setChats(chats);
     setMe(chats.find((c) => c.me)?.me);
     setScreen(result.length === 1 ? { kind: "stats", id: result[0].chat.id } : { kind: "compare" });
   };
@@ -104,6 +107,7 @@ export default function App() {
     setDialogs([]);
     setExported([]);
     setStats([]);
+    setChats([]);
     setScreen({ kind: "home" });
     setNotice(t.loggedOut);
   };
@@ -198,7 +202,7 @@ export default function App() {
         </div>
       )}
 
-      {current && <StatsView s={current} t={t} lang={lang} onBack={backFromStats} />}
+      {current && <StatsView s={current} chat={chats.find((c) => c.id === current.chat.id)} t={t} lang={lang} onBack={backFromStats} />}
       {screen.kind === "compare" && <CompareView rows={compareRows} t={t} lang={lang} onOpen={(id) => setScreen({ kind: "stats", id })} onBack={() => setScreen({ kind: "home" })} />}
 
       {loggedIn && (

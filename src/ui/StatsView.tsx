@@ -1,6 +1,6 @@
-import { useState, type MouseEvent } from "react";
-import type { CompareRow } from "../stats/engine.ts";
-import type { MsgKind, Stats } from "../stats/types.ts";
+import { useState, type FormEvent, type MouseEvent } from "react";
+import { countWord, type CompareRow, type WordCount } from "../stats/engine.ts";
+import type { ChatData, MsgKind, Stats } from "../stats/types.ts";
 import { formatDuration, type Lang, type Texts } from "../i18n.ts";
 import { Bars, Columns, Heatmap } from "./Charts.tsx";
 import { drawShareCard, shareImage } from "./shareCard.ts";
@@ -38,7 +38,53 @@ export function Promo({ t, campaign = "after-stats", quiet = false }: { t: Texts
 
 const dateOf = (ts: number | null, lang: Lang) => (ts ? new Date(ts * 1000).toLocaleDateString(lang, { year: "numeric", month: "short", day: "numeric" }) : "—");
 
-export function StatsView({ s, t, lang, onBack }: { s: Stats; t: Texts; lang: Lang; onBack: () => void }) {
+// Who used a word how often. Runs on the messages already on this device, on
+// submit rather than per keystroke, so a 100k-message chat stays smooth.
+function WordSearch({ chat, t, lang }: { chat: ChatData; t: Texts; lang: Lang }) {
+  const [query, setQuery] = useState("");
+  const [forms, setForms] = useState(false);
+  const [result, setResult] = useState<WordCount | null>(null);
+  const search = (e?: FormEvent) => {
+    e?.preventDefault();
+    setResult(query.trim() ? countWord(chat, query, { forms }) : null);
+  };
+  const rows = result ? result.senders.filter((p) => p.count > 0 || chat.type === "private").slice(0, 15) : [];
+  return (
+    <section className="card">
+      <h2>{t.searchTitle}</h2>
+      <form className="search" onSubmit={search}>
+        <input type="search" value={query} placeholder={t.searchPlaceholder} enterKeyHint="search" onChange={(e) => setQuery(e.target.value)} />
+        <button className="btn primary" type="submit">
+          {t.searchButton}
+        </button>
+      </form>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={forms}
+          onChange={(e) => {
+            setForms(e.target.checked);
+            if (result) setResult(countWord(chat, query, { forms: e.target.checked }));
+          }}
+        />
+        {t.searchForms}
+      </label>
+      {result &&
+        (result.total ? (
+          <>
+            <p className="muted small">
+              «{result.query}»: {result.total.toLocaleString(lang)} {t.searchTimes}
+            </p>
+            <Bars rows={rows.map((p) => ({ label: p.name, value: p.count }))} />
+          </>
+        ) : (
+          <p className="muted small">{t.searchNone.replace("{q}", result.query)}</p>
+        ))}
+    </section>
+  );
+}
+
+export function StatsView({ s, chat, t, lang, onBack }: { s: Stats; chat?: ChatData; t: Texts; lang: Lang; onBack: () => void }) {
   const [words, setWords] = useState(false);
   const [sharing, setSharing] = useState(false);
   if (!s.total) {
@@ -163,6 +209,8 @@ export function StatsView({ s, t, lang, onBack }: { s: Stats; t: Texts; lang: La
           )}
         </section>
       )}
+
+      {chat && <WordSearch chat={chat} t={t} lang={lang} />}
 
       {s.chat.type !== "private" && s.replyPairs.length > 0 && (
         <section className="card">

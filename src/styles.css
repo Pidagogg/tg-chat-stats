@@ -86,3 +86,5 @@ h3 { font-size: 13px; margin: 14px 0 6px; color: var(--hint); font-weight: 600; 
 .compare-grid { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--hint); }
 .bottom { margin-top: 28px; text-align: center; }
 .bottom .link { align-self: center; }
+.search { display: flex; gap: 8px; }
+.search input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
