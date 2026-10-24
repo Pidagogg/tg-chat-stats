@@ -88,11 +88,14 @@ const send = (chatId, text, replyMarkup) =>
 // the Mini App), then the pitch with its button. An album can't carry
 // buttons, so the button rides on the text. Telegram fetches the pictures by
 // URL once; after that their file_ids are reused, so nothing is fetched again.
+// Cloudflare sits in front of w-flow.tech and caches for hours: bump AD_VERSION
+// whenever the pictures change, or Telegram keeps getting the old ones.
 const AD_PICTURES = ["1-hero", "2-ai-bot", "3-digest", "4-sheets"];
+const AD_VERSION = 2;
 const adFileIds = { en: null, ru: null };
 
 async function sendPictures(chatId, lang) {
-  const media = AD_PICTURES.map((name, i) => ({ type: "photo", media: adFileIds[lang]?.[i] || new URL(`ad/${lang}-${name}.png`, WEBAPP_URL).href }));
+  const media = AD_PICTURES.map((name, i) => ({ type: "photo", media: adFileIds[lang]?.[i] || new URL(`ad/${lang}-${name}.png?v=${AD_VERSION}`, WEBAPP_URL).href }));
   const sent = await call("sendMediaGroup", { chat_id: chatId, media });
   adFileIds[lang] = sent.map((m) => m.photo.at(-1).file_id);
 }
